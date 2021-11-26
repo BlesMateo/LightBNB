@@ -18,7 +18,7 @@ const users = require('./json/users.json');
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithEmail = function(email) {
-  const qString = `
+  const queryString = `
   SELECT *
   FROM users
   WHERE users.email = $1
@@ -26,9 +26,9 @@ const getUserWithEmail = function(email) {
   const value = [email] //accepts an email address
 
   return pool
-  .query(qString, value)
-  .then((response) => {
-    return response.rows[0]; // promise resolves with user that has an email
+  .query(queryString, value)
+  .then((res) => {
+    return res.rows[0]; // promise resolves with user that has an email
   })
   .catch(() => {
     return null; // if the user does not exist return null
@@ -42,7 +42,7 @@ exports.getUserWithEmail = getUserWithEmail;
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithId = function(id) {
-  const qString = `
+  const queryString = `
   SELECT *
   FROM users
   WHERE users.id = $1
@@ -51,9 +51,9 @@ const getUserWithId = function(id) {
   const value = [id]
 
   return pool
-  .query(qString, value)
-  .then((response) => {
-    return response.rows[0];
+  .query(queryString, value)
+  .then((res) => {
+    return res.rows[0];
   })
   .catch (() => {
     return null;
@@ -77,12 +77,12 @@ const addUser =  function(user) {
 
   return pool
   .query(inputString, value)
-  .then((response) => {
+  .then((res) => {
     const newUser = {
-      id: response.rows.id,
-      name: response.rows.name,
-      email: response.rows.email,
-      password: response.rows.password
+      id: res.rows.id,
+      name: res.rows.name,
+      email: res.rows.email,
+      password: res.rows.password
     }
     return newUser;
   })
@@ -100,27 +100,22 @@ exports.addUser = addUser;
  * @return {Promise<[{}]>} A promise to the reservations.
  */
 const getAllReservations = function(guest_id, limit = 10) {
-  const reservQuery = `
+  return pool
+  .query(`
   SELECT *
   FROM properties
   JOIN reservations
   ON property_id = properties.id
-  WHERE quest_id = $1
-  AND start_date > now()::date
-  LIMIT $2
-  `
-  const value = [guest_id, limit]
+  WHERE guest_id = $1
+  LIMIT $2`, [guest_id, limit])
 
-  return pool
-    .query(reservQuery, value)
-    .then((response) => {
-      console.log(response.rows)
-      return response.rows
+    .then((res) => {
+      return res.rows
     })
-    .catch((err) => {
-      console.error(err.message)
-    })
-}
+    .catch(() => {
+      return null;
+    });
+  }
 exports.getAllReservations = getAllReservations;
 
 /// Properties
@@ -132,12 +127,44 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
  const getAllProperties = (options, limit = 10) => {
-  return pool
-    .query(`SELECT * FROM properties LIMIT $1`, [limit])
-    .then((result) => result.rows)
-    .catch((err) => {
-      console.log(err.message);
-    });
+  const queryParams = [];
+
+  let queryString = `
+  SELECT properties.*,
+  AVG(property_reviews.rating) AS average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
+  `
+  if(options.owner_id) {
+    queryParams.push(options.owner_id);
+    queryString = queryString + ` WHERE owner_id = $${queryParams.length}`
+  }
+
+  if(options.city) {
+    queryParams.push(`%${options.city}%`)
+    queryString = queryString + ` WHERE city LIKE $${queryParams.length}`
+  }
+
+  if(options.minimum_price_per_night && options.maximum_price_per_night) {
+    queryParams.push(options.minimum_price_per_night * 100, options.maximum_price_per_night * 100);
+    queryString = queryString + `AND (properties.cost_per_night >= $${queryParams.length - 1} AND properties.cost_per_night <= $${queryParams.length})`
+  }
+
+  if(options.minimum_rating) {
+    queryParams.push(options.minimum_rating);
+    queryString = queryString + `AND property_reviews.rating >= $${queryParams.lengh}`;
+  }
+
+  queryParams.push(limit);
+  queryString += `
+  GROUP BY properties.id
+  ORDER BY cost_per_night
+  LIMIT $${queryParams.length};
+  `;
+
+  return pool.query(queryString, queryParams)
+  .then((res) => res.rows)
+  .catch((err) => console.log(err.message));
 };
 exports.getAllProperties = getAllProperties;
 
