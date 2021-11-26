@@ -135,7 +135,7 @@ exports.getAllReservations = getAllReservations;
   FROM properties
   JOIN property_reviews ON properties.id = property_id
   `
-  if(options.owner_id) {
+  if(options.owner_id) { // if owner is passed in, return properties belonging to the owner
     queryParams.push(options.owner_id);
     queryString = queryString + ` WHERE owner_id = $${queryParams.length}`
   }
@@ -145,12 +145,12 @@ exports.getAllReservations = getAllReservations;
     queryString = queryString + ` WHERE city LIKE $${queryParams.length}`
   }
 
-  if(options.minimum_price_per_night && options.maximum_price_per_night) {
+  if(options.minimum_price_per_night && options.maximum_price_per_night) { // return properties within the inputted price range
     queryParams.push(options.minimum_price_per_night * 100, options.maximum_price_per_night * 100);
     queryString = queryString + `AND (properties.cost_per_night >= $${queryParams.length - 1} AND properties.cost_per_night <= $${queryParams.length})`
   }
 
-  if(options.minimum_rating) {
+  if(options.minimum_rating) { // return rating equal to or higher than the inputted rating
     queryParams.push(options.minimum_rating);
     queryString = queryString + `AND property_reviews.rating >= $${queryParams.lengh}`;
   }
@@ -161,7 +161,7 @@ exports.getAllReservations = getAllReservations;
   ORDER BY cost_per_night
   LIMIT $${queryParams.length};
   `;
-
+  console.log(queryString, queryParams)
   return pool.query(queryString, queryParams)
   .then((res) => res.rows)
   .catch((err) => console.log(err.message));
